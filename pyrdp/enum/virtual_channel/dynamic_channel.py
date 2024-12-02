@@ -30,3 +30,8 @@ class DynamicChannelCommand(IntEnum):
     DATA_COMPRESSED = 0x07
     SOFT_SYNC_REQUEST = 0x08
     SOFT_SYNC_RESPONSE = 0x09
+
+class DynamicChannelCapability(IntEnum):
+    VERSION_ONE = 0x01
+    VERSION_TWO = 0x02
+    VERSION_THREE = 0x03
