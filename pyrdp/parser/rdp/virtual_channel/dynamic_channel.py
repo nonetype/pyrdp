@@ -97,7 +97,7 @@ class DynamicChannelParser(Parser):
         elif cbid == CbId.TWO_BYTE:
             return Uint16LE.unpack(stream)
         elif cbid == CbId.FOUR_BYTES:
-            return Uint16LE.unpack(stream)
+            return Uint32LE.unpack(stream)
         else:
             raise ValueError(f"Invalid channel id length: {cbid}")
 
