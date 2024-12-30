@@ -27,7 +27,8 @@ from pyrdp.pdu.rdp.capability import BitmapCacheHostSupportCapability, BitmapCac
 from pyrdp.pdu.rdp.client_info import ClientExtraInfo, ClientInfoPDU
 from pyrdp.pdu.rdp.connection import ClientChannelDefinition, ClientClusterData, ClientCoreData, ClientDataPDU, \
     ClientNetworkData, ClientSecurityData, ProprietaryCertificate, ServerCertificate, ServerCoreData, ServerDataPDU, \
-    ServerNetworkData, ServerSecurityData
+    ServerNetworkData, ServerSecurityData, ServerMessageChannelData, ServerMultitransportData, ClientMonitorAttribute, \
+    ClientMonitorData, ClientMessageChannelData, ClientMonitorExData, ClientMultitransportData, ClientUnused1Data
 from pyrdp.pdu.rdp.fastpath import FastPathBitmapEvent, FastPathEvent, FastPathEventRaw, FastPathInputEvent, \
     FastPathMouseEvent, FastPathOrdersEvent, FastPathOutputEvent, FastPathOutputEvent, FastPathPDU, \
     FastPathScanCodeEvent, FastPathUnicodeEvent

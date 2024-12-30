@@ -140,13 +140,63 @@ class ClientClusterData:
         self.redirectedSessionID = redirectedSessionID
 
 
+class ClientMonitorAttribute:
+    def __init__(self, physicalWidth: int, physicalHeight: int, orientation: int, desktopScaleFactor: int, deviceScaleFactor: int):
+        self.physicalWidth = physicalWidth
+        self.physicalHeight = physicalHeight
+        self.orientation = orientation
+        self.desktopScaleFactor = desktopScaleFactor
+        self.deviceScaleFactor = deviceScaleFactor
+
+
+class ClientMonitorData:
+    def __init__(self, flags: int, monitorAttributeSize: int, monitorCount: int, monitorAttributes: [ClientMonitorAttribute]):
+        self.header = ConnectionDataType.CLIENT_MONITOR
+        self.flags = flags
+        self.monitorAttributeSize = monitorAttributeSize
+        self.monitorCount = monitorCount
+        self.monitorAttributes = monitorAttributes
+
+
+class ClientMessageChannelData:
+    def __init__(self, flags: int):
+        self.header = ConnectionDataType.CLIENT_MSGCHANNEL
+        self.flags = flags
+
+
+class ClientMonitorExData:
+    def __init__(self, flags: int, monitorAttributeSize: int, monitorCount: int, monitorAttributes: [ClientMonitorAttribute]):
+        self.header = ConnectionDataType.CLIENT_MONITOR_EX
+        self.flags = flags
+        self.monitorAttributeSize = monitorAttributeSize
+        self.monitorCount = monitorCount
+        self.monitorAttributes = monitorAttributes
+
+
+class ClientMultitransportData:
+    def __init__(self, flags: int):
+        self.header = ConnectionDataType.CLIENT_MULTITRANSPORT
+        self.flags = flags
+
+
+class ClientUnused1Data:
+    def __init__(self, pad2Octets: int):
+        self.header = ConnectionDataType.CLIENT_UNUSED1
+        self.pad2Octets = pad2Octets
+
+
 class ClientDataPDU(PDU):
-    def __init__(self, coreData: ClientCoreData, securityData: ClientSecurityData, networkData: ClientNetworkData, clusterData: Optional[ClientClusterData]):
+    def __init__(self, coreData: ClientCoreData, securityData: ClientSecurityData, networkData: ClientNetworkData, clusterData: Optional[ClientClusterData], monitorData: Optional[ClientMonitorData], messageChannelData: Optional[ClientMessageChannelData], monitorExData: Optional[ClientMonitorExData], multitransportData: Optional[ClientMultitransportData], unused1Data: Optional[ClientUnused1Data]):
         PDU.__init__(self)
         self.coreData = coreData
         self.securityData = securityData
         self.networkData = networkData
         self.clusterData = clusterData
+        self.monitorData = monitorData
+        self.messageChannelData = messageChannelData
+        self.monitorExData = monitorExData
+        self.multitransportData = multitransportData
+        self.unused1Data = unused1Data
 
     @staticmethod
     def generate(serverSelectedProtocol: NegotiationProtocols,
@@ -157,7 +207,7 @@ class ClientDataPDU(PDU):
         core = ClientCoreData.generate(serverSelectedProtocol, desktopWidth = desktopWidth, desktopHeight = desktopHeight)
         security = ClientSecurityData.generate(encryptionMethods = encryptionMethods, isFrenchLocale = isFrenchLocale)
         network = ClientNetworkData.generate(clipboard = clipboard, drive = drive, sound = sound)
-        return ClientDataPDU(core, security, network, None)
+        return ClientDataPDU(core, security, network, None, None, None, None, None, None)
 
 
 class ServerCertificate:
@@ -201,11 +251,24 @@ class ServerSecurityData:
         self.serverCertificate = serverCertificate
 
 
+class ServerMessageChannelData:
+    def __init__(self, channelId: int):
+        self.header = ConnectionDataType.SERVER_MSGCHANNEL
+        self.channelId = channelId
+
+
+class ServerMultitransportData:
+    def __init__(self, flags: int):
+        self.header = ConnectionDataType.SERVER_MULTITRANSPORT
+        self.flags = flags
+
+
 class ServerDataPDU(PDU):
-    def __init__(self, core: ServerCoreData, security: ServerSecurityData, network: ServerNetworkData):
+    def __init__(self, core: ServerCoreData, security: ServerSecurityData, network: ServerNetworkData, messageChannel: ServerMessageChannelData, multitransport: ServerMultitransportData):
         PDU.__init__(self)
         self.coreData = core
         self.securityData = security
         self.networkData = network
-
+        self.messageChannelData = messageChannel
+        self.multitransportData = multitransport
 

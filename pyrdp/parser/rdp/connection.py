@@ -17,7 +17,9 @@ from pyrdp.enum import ColorDepth, ConnectionDataType, ConnectionType, DesktopOr
 from pyrdp.exceptions import ParsingError, UnknownPDUTypeError, ExploitError
 from pyrdp.parser.parser import Parser
 from pyrdp.pdu import ClientChannelDefinition, ClientClusterData, ClientCoreData, ClientDataPDU, ClientNetworkData, \
-    ClientSecurityData, ProprietaryCertificate, ServerCoreData, ServerDataPDU, ServerNetworkData, ServerSecurityData
+    ClientSecurityData, ProprietaryCertificate, ServerCoreData, ServerDataPDU, ServerNetworkData, ServerSecurityData, \
+    ServerMessageChannelData, ServerMultitransportData, ClientMonitorAttribute, ClientMonitorData, ClientMessageChannelData, \
+    ClientMonitorExData, ClientMultitransportData, ClientUnused1Data
 
 
 class ClientConnectionParser(Parser):
@@ -32,6 +34,11 @@ class ClientConnectionParser(Parser):
             ConnectionDataType.CLIENT_SECURITY: self.parseClientSecurityData,
             ConnectionDataType.CLIENT_NETWORK: self.parseClientNetworkData,
             ConnectionDataType.CLIENT_CLUSTER: self.parseClientClusterData,
+            ConnectionDataType.CLIENT_MONITOR: self.parseClientMonitorData,
+            ConnectionDataType.CLIENT_MSGCHANNEL: self.parseClientMessageChannelData,
+            ConnectionDataType.CLIENT_MONITOR_EX: self.parseClientMonitorExData,
+            ConnectionDataType.CLIENT_MULTITRANSPORT: self.parseClientMultitransportData,
+            ConnectionDataType.CLIENT_UNUSED1: self.parseClientUnused1Data,
         }
 
         self.writers = {
@@ -39,7 +46,11 @@ class ClientConnectionParser(Parser):
             ConnectionDataType.CLIENT_SECURITY: self.writeClientSecurityData,
             ConnectionDataType.CLIENT_NETWORK: self.writeClientNetworkData,
             ConnectionDataType.CLIENT_CLUSTER: self.writeClientClusterData,
-
+            ConnectionDataType.CLIENT_MONITOR: self.writeClientMonitorData,
+            ConnectionDataType.CLIENT_MSGCHANNEL: self.writeClientMessageChannelData,
+            ConnectionDataType.CLIENT_MONITOR_EX: self.writeClientMonitorExData,
+            ConnectionDataType.CLIENT_MULTITRANSPORT: self.writeClientMultitransportData,
+            ConnectionDataType.CLIENT_UNUSED1: self.writeClientUnused1Data,
         }
 
     def doParse(self, data: bytes) -> ClientDataPDU:
@@ -51,6 +62,11 @@ class ClientConnectionParser(Parser):
         security = None
         network = None
         cluster = None
+        monitor = None
+        messageChannel = None
+        monitorEx = None
+        multitransport = None
+        unused1 = None
 
         stream = BytesIO(data)
         while stream.tell() != len(stream.getvalue()) and (core is None or security is None or network is None or cluster is None):
@@ -64,11 +80,21 @@ class ClientConnectionParser(Parser):
                 network = structure
             elif structure.header == ConnectionDataType.CLIENT_CLUSTER:
                 cluster = structure
+            elif structure.header == ConnectionDataType.CLIENT_MONITOR:
+                monitor = structure
+            elif structure.header == ConnectionDataType.CLIENT_MSGCHANNEL:
+                messageChannel = structure
+            elif structure.header == ConnectionDataType.CLIENT_MONITOR_EX:
+                monitorEx = structure
+            elif structure.header == ConnectionDataType.CLIENT_MULTITRANSPORT:
+                multitransport = structure
+            elif structure.header == ConnectionDataType.CLIENT_UNUSED1:
+                unused1 = structure
 
             if len(stream.getvalue()) == 0:
                 break
 
-        return ClientDataPDU(core, security, network, cluster)
+        return ClientDataPDU(core, security, network, cluster, monitor, messageChannel, monitorEx, multitransport, unused1)
 
     def parseStructure(self, stream: BytesIO) -> typing.Union[ClientCoreData, ClientNetworkData, ClientSecurityData, ClientClusterData]:
         header = Uint16LE.unpack(stream)
@@ -163,6 +189,50 @@ class ClientConnectionParser(Parser):
         redirectedSessionID = Uint32LE.unpack(stream)
         return ClientClusterData(flags, redirectedSessionID)
 
+    def parseClientMonitorAttribute(self, stream: BytesIO) -> ClientMonitorAttribute:
+        physicalWidth = Uint32LE.unpack(stream)
+        physicalHeight = Uint32LE.unpack(stream)
+        orientation = Uint32LE.unpack(stream)
+        desktopScaleFactor = Uint32LE.unpack(stream)
+        deviceScaleFactor = Uint32LE.unpack(stream)
+        return ClientMonitorAttribute(physicalWidth, physicalHeight, orientation, desktopScaleFactor, deviceScaleFactor)
+
+    def parseClientMonitorData(self, stream: BytesIO) -> ClientMonitorData:
+        flags = Uint32LE.unpack(stream)
+        monitorAttributeSize = Uint32LE.unpack(stream)
+        monitorCount = Uint32LE.unpack(stream)
+
+        monitorAttributes = []
+
+        for _ in range(monitorCount):
+            monitorAttributes.append(self.parseClientMonitorAttribute(stream))
+
+        return ClientMonitorData(flags, monitorAttributeSize, monitorCount, monitorAttributes)
+
+    def parseClientMessageChannelData(self, stream: BytesIO) -> ClientMessageChannelData:
+        flags = Uint32LE.unpack(stream)
+        return ClientMessageChannelData(flags)
+
+    def parseClientMonitorExData(self, stream: BytesIO) -> ClientMonitorExData:
+        flags = Uint32LE.unpack(stream)
+        monitorAttributeSize = Uint32LE.unpack(stream)
+        monitorCount = Uint32LE.unpack(stream)
+
+        monitorAttributes = []
+
+        for _ in range(monitorCount):
+            monitorAttributes.append(self.parseClientMonitorAttribute(stream))
+
+        return ClientMonitorExData(flags, monitorAttributeSize, monitorCount, monitorAttributes)
+
+    def parseClientMultitransportData(self, stream: BytesIO) -> ClientMultitransportData:
+        flags = Uint32LE.unpack(stream)
+        return ClientMultitransportData(flags)
+    
+    def parseClientUnused1Data(self, stream: BytesIO) -> ClientUnused1Data:
+        pad2Octets = Uint16LE.unpack(stream)
+        return ClientUnused1Data(pad2Octets)
+
     def write(self, pdu: ClientDataPDU) -> bytes:
         """
         Encode a Client Data PDU to bytes.
@@ -182,9 +252,24 @@ class ClientConnectionParser(Parser):
         if pdu.clusterData:
             self.writeStructure(stream, pdu.clusterData)
 
+        if pdu.monitorData:
+            self.writeStructure(stream, pdu.monitorData)
+
+        if pdu.messageChannelData:
+            self.writeStructure(stream, pdu.messageChannelData)
+
+        if pdu.monitorExData:
+            self.writeStructure(stream, pdu.monitorExData)
+
+        if pdu.multitransportData:
+            self.writeStructure(stream, pdu.multitransportData)
+
+        if pdu.unused1Data:
+            self.writeStructure(stream, pdu.unused1Data)
+
         return stream.getvalue()
 
-    def writeStructure(self, stream: BytesIO, data: typing.Union[ClientCoreData, ClientNetworkData, ClientSecurityData, ClientClusterData]):
+    def writeStructure(self, stream: BytesIO, data: typing.Union[ClientCoreData, ClientNetworkData, ClientSecurityData, ClientClusterData, ClientMonitorData, ClientMessageChannelData, ClientMonitorExData, ClientMultitransportData, ClientUnused1Data]):
         if data.header not in self.writers:
             raise UnknownPDUTypeError("Trying to write unknown Client Data structure %s" % data.header, data.header)
 
@@ -249,6 +334,35 @@ class ClientConnectionParser(Parser):
         stream.write(Uint32LE.pack(cluster.flags))
         stream.write(Uint32LE.pack(cluster.redirectedSessionID))
 
+    def writeClientMonitorAttribute(self, stream: BytesIO, monitorAttribute: ClientMonitorAttribute):
+        stream.write(Uint32LE.pack(monitorAttribute.physicalWidth))
+        stream.write(Uint32LE.pack(monitorAttribute.physicalHeight))
+        stream.write(Uint32LE.pack(monitorAttribute.orientation))
+        stream.write(Uint32LE.pack(monitorAttribute.desktopScaleFactor))
+        stream.write(Uint32LE.pack(monitorAttribute.deviceScaleFactor))
+
+    def writeClientMonitorData(self, stream: BytesIO, monitor: ClientMonitorData):
+        stream.write(Uint32LE.pack(monitor.flags))
+        stream.write(Uint32LE.pack(monitor.monitorAttributeSize))
+        stream.write(Uint32LE.pack(monitor.monitorCount))
+        for monitorAttribute in monitor.monitorAttributes:
+            self.writeClientMonitorAttribute(stream, monitorAttribute)
+
+    def writeClientMessageChannelData(self, stream: BytesIO, messageChannel: ClientMessageChannelData):
+        stream.write(Uint32LE.pack(messageChannel.flags))
+
+    def writeClientMonitorExData(self, stream: BytesIO, monitorEx: ClientMonitorExData):
+        stream.write(Uint32LE.pack(monitorEx.flags))
+        stream.write(Uint32LE.pack(monitorEx.monitorAttributeSize))
+        stream.write(Uint32LE.pack(monitorEx.monitorCount))
+        for monitorAttribute in monitorEx.monitorAttributes:
+            self.writeClientMonitorAttribute(stream, monitorAttribute)
+
+    def writeClientMultitransportData(self, stream: BytesIO, multitransport: ClientMultitransportData):
+        stream.write(Uint32LE.pack(multitransport.flags))
+
+    def writeClientUnused1Data(self, stream: BytesIO, unused1: ClientUnused1Data):
+        stream.write(Uint16LE.pack(unused1.pad2Octets))
 
 class ServerConnectionParser(Parser):
     """
@@ -261,12 +375,16 @@ class ServerConnectionParser(Parser):
             ConnectionDataType.SERVER_CORE: self.parseServerCoreData,
             ConnectionDataType.SERVER_NETWORK: self.parseServerNetworkData,
             ConnectionDataType.SERVER_SECURITY: self.parseServerSecurityData,
+            ConnectionDataType.SERVER_MSGCHANNEL: self.parseServerMessageChannelData,
+            ConnectionDataType.SERVER_MULTITRANSPORT: self.parseServerMultitransportData,
         }
 
         self.writers = {
             ConnectionDataType.SERVER_CORE: self.writeServerCoreData,
             ConnectionDataType.SERVER_NETWORK: self.writeServerNetworkData,
             ConnectionDataType.SERVER_SECURITY: self.writeServerSecurityData,
+            ConnectionDataType.SERVER_MSGCHANNEL: self.writeServerMessageChannelData,
+            ConnectionDataType.SERVER_MULTITRANSPORT: self.writeServerMultitransportData,
         }
 
     def doParse(self, data: bytes) -> ServerDataPDU:
@@ -276,6 +394,8 @@ class ServerConnectionParser(Parser):
         core = None
         security = None
         network = None
+        messageChannel = None
+        multitransport = None
 
         stream = BytesIO(data)
         while core is None or security is None or network is None:
@@ -287,11 +407,17 @@ class ServerConnectionParser(Parser):
                 security = structure
             elif structure.header == ConnectionDataType.SERVER_NETWORK:
                 network = structure
+            elif structure.header == ConnectionDataType.SERVER_MSGCHANNEL:
+                messageChannel = structure
+            elif structure.header == ConnectionDataType.SERVER_MULTITRANSPORT:
+                multitransport = structure
+            else:
+                raise UnknownPDUTypeError("Trying to parse unknown server data structure %s" % structure.header, structure.header)
 
             if len(stream.getvalue()) == 0:
                 break
 
-        return ServerDataPDU(core, security, network)
+        return ServerDataPDU(core, security, network, messageChannel, multitransport)
 
     def parseStructure(self, stream: BytesIO) -> typing.Union[ServerCoreData, ServerSecurityData, ServerNetworkData]:
         header = Uint16LE.unpack(stream)
@@ -347,6 +473,16 @@ class ServerConnectionParser(Parser):
             pass
 
         return ServerSecurityData(encryptionMethod, encryptionLevel, serverRandom, serverCertificate)
+    
+    def parseServerMessageChannelData(self, stream: BytesIO) -> ServerMessageChannelData:
+        stream = StrictStream(stream)
+        channelId = Uint16LE.unpack(stream)
+        return ServerMessageChannelData(channelId)
+    
+    def parseServerMultitransportData(self, stream: BytesIO) -> ServerMultitransportData:
+        stream = StrictStream(stream)
+        flags = Uint32LE.unpack(stream)
+        return ServerMultitransportData(flags)
 
     def parseServerCertificate(self, data: bytes) -> ProprietaryCertificate:
         stream = BytesIO(data)
@@ -404,6 +540,12 @@ class ServerConnectionParser(Parser):
         if pdu.networkData:
             self.writeStructure(stream, pdu.networkData)
 
+        if pdu.messageChannelData:
+            self.writeStructure(stream, pdu.messageChannelData)
+
+        if pdu.multitransportData:
+            self.writeStructure(stream, pdu.multitransportData)
+
         return stream.getvalue()
 
     def writeStructure(self, stream: BytesIO, data: typing.Union[ServerCoreData, ServerSecurityData, ServerNetworkData]):
@@ -459,6 +601,12 @@ class ServerConnectionParser(Parser):
             stream.write(Uint32LE.pack(len(serverCertificate)))
             stream.write(data.serverRandom)
             stream.write(serverCertificate)
+
+    def writeServerMessageChannelData(self, stream: BytesIO, data: ServerMessageChannelData):
+        stream.write(Uint16LE.pack(data.channelId))
+
+    def writeServerMultitransportData(self, stream: BytesIO, data: ServerMultitransportData):
+        stream.write(Uint32LE.pack(data.flags))
 
     def writeServerCertificate(self, certificate: ProprietaryCertificate) -> bytes:
         stream = BytesIO()
